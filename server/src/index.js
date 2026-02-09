@@ -4,6 +4,8 @@ import dotenv from "dotenv";
 import connectDB from "./config/db.js";
 import locationRoutes from "./routes/locationRoutes.js";
 import roadRoutes from "./routes/roadRoutes.js";
+import routeRoutes from "./routes/routeRoutes.js";
+
 
 
 
@@ -15,6 +17,7 @@ app.use(cors());
 app.use(express.json());
 app.use("/api/locations", locationRoutes);
 app.use("/api/roads", roadRoutes);
+app.use("/api/routes", routeRoutes);
 
 
 app.get("/", (req, res) => {
