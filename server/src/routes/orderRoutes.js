@@ -1,5 +1,7 @@
 import express from "express";
 import Order from "../models/Order.js";
+import UndoAction from "../models/UndoAction.js";
+
 
 const router = express.Router();
 
@@ -7,6 +9,11 @@ const router = express.Router();
 router.post("/", async (req, res) => {
   try {
     const order = await Order.create(req.body);
+    await UndoAction.create({
+  type: "CREATE_ORDER",
+  payload: { orderId: String(order._id) },
+});
+
     res.status(201).json(order);
   } catch (err) {
     res.status(400).json({ message: err.message });

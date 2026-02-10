@@ -1,6 +1,7 @@
 import express from "express";
 import DispatchQueue from "../models/DispatchQueue.js";
 import Order from "../models/Order.js";
+import UndoAction from "../models/UndoAction.js";
 
 const router = express.Router();
 
@@ -14,10 +15,12 @@ async function getMainQueue() {
 router.get("/", async (req, res) => {
   try {
     const q = await getMainQueue();
+
     const populated = await DispatchQueue.findById(q._id).populate({
       path: "orderIds",
       populate: { path: "customerLocation", select: "name type lat lng" },
     });
+
     res.json(populated);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -39,12 +42,19 @@ router.post("/enqueue/:orderId", async (req, res) => {
       return res.status(400).json({ message: "Order already in queue" });
     }
 
+    // add to queue
     q.orderIds.push(orderId);
     await q.save();
 
     // update order status
     order.status = "QUEUED";
     await order.save();
+
+    // push undo action (STACK)
+    await UndoAction.create({
+      type: "ENQUEUE_ORDER",
+      payload: { orderId: String(orderId) },
+    });
 
     res.json({ message: "Enqueued", queueSize: q.orderIds.length });
   } catch (err) {
