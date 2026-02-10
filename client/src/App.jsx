@@ -46,6 +46,9 @@ export default function App() {
   const [loadingOrder, setLoadingOrder] = useState(false);
   const [loadingEnqueueId, setLoadingEnqueueId] = useState(null);
   const [loadingDispatch, setLoadingDispatch] = useState(false);
+  const [loadingUndo, setLoadingUndo] = useState(false);
+  const [undoMsg, setUndoMsg] = useState("");
+
 
   const loadLocations = async () => {
     const res = await api.get("/api/locations");
@@ -203,6 +206,19 @@ export default function App() {
       setLoadingDispatch(false);
     }
   };
+  const undoLast = async () => {
+  setLoadingUndo(true);
+  setUndoMsg("");
+  try {
+    const res = await api.post("/api/undo");
+    setUndoMsg(res.data.message || "Undo done");
+    await loadOrders();
+    await loadQueue();
+  } finally {
+    setLoadingUndo(false);
+  }
+};
+
 
   const queueSize = queue?.orderIds?.length ?? 0;
 
@@ -506,6 +522,19 @@ export default function App() {
               >
                 {loadingDispatch ? "Dispatching..." : "Dispatch Next"}
               </button>
+              <button
+               onClick={undoLast}
+                disabled={loadingUndo}
+                className="mt-3 w-full border border-black text-black rounded-lg py-2 disabled:opacity-60">
+                {loadingUndo ? "Undoing..." : "Undo Last Action"}
+                </button>
+
+              {undoMsg && (
+                 <div className="mt-2 text-xs text-gray-700">
+                 {undoMsg}
+                  </div>
+                )}
+
 
               <div className="mt-4 space-y-2">
                 {queueSize === 0 ? (

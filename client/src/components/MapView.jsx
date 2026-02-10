@@ -1,4 +1,20 @@
-import { MapContainer, TileLayer, Marker, Popup, Polyline } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from "react-leaflet";
+import { useEffect } from "react";
+import L from "leaflet";
+
+function FitBounds({ routePath }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!routePath || routePath.length < 2) return;
+
+    const latLngs = routePath.map((p) => [p.lat, p.lng]);
+    const bounds = L.latLngBounds(latLngs);
+    map.fitBounds(bounds, { padding: [30, 30] });
+  }, [routePath, map]);
+
+  return null;
+}
 
 export default function MapView({ locations, roads, routePath }) {
   const center = [7.2936, 80.6413];
@@ -16,7 +32,10 @@ export default function MapView({ locations, roads, routePath }) {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        {/* Roads (graph edges) */}
+        {/* Auto-fit bounds when route changes */}
+        <FitBounds routePath={routePath} />
+
+        {/* Roads (normal) */}
         {roads.map((r) => (
           <Polyline
             key={r._id}
@@ -24,12 +43,16 @@ export default function MapView({ locations, roads, routePath }) {
               [r.from.lat, r.from.lng],
               [r.to.lat, r.to.lng],
             ]}
+            pathOptions={{ weight: 3, opacity: 0.6 }}
           />
         ))}
 
         {/* Shortest Route (highlight) */}
         {routeLine && (
-          <Polyline positions={routeLine} />
+          <Polyline
+            positions={routeLine}
+            pathOptions={{ weight: 6, opacity: 0.9 }}
+          />
         )}
 
         {/* Locations */}
