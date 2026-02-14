@@ -1,28 +1,45 @@
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from "react-leaflet";
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  Popup,
+  Polyline,
+  useMap,
+} from "react-leaflet";
 import { useEffect } from "react";
 import L from "leaflet";
 
-function FitBounds({ routePath }) {
+function FitBounds({ boundsCoords }) {
   const map = useMap();
 
   useEffect(() => {
-    if (!routePath || routePath.length < 2) return;
+    if (!boundsCoords || boundsCoords.length < 2) return;
 
-    const latLngs = routePath.map((p) => [p.lat, p.lng]);
-    const bounds = L.latLngBounds(latLngs);
+    const bounds = L.latLngBounds(boundsCoords);
     map.fitBounds(bounds, { padding: [30, 30] });
-  }, [routePath, map]);
+  }, [boundsCoords, map]);
 
   return null;
 }
 
-export default function MapView({ locations, roads, routePath }) {
+export default function MapView({
+  locations,
+  roads,
+  routePath,
+  realRouteCoords,
+  useRealRoute,
+}) {
   const center = [7.2936, 80.6413];
 
-  const routeLine =
+  const graphRouteLine =
     routePath && routePath.length >= 2
       ? routePath.map((p) => [p.lat, p.lng])
       : null;
+
+  const realRouteLine =
+    realRouteCoords && realRouteCoords.length >= 2 ? realRouteCoords : null;
+
+  const boundsCoords = useRealRoute ? realRouteLine : graphRouteLine;
 
   return (
     <div className="w-full h-[500px] rounded-xl overflow-hidden border">
@@ -32,10 +49,10 @@ export default function MapView({ locations, roads, routePath }) {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        {/* Auto-fit bounds when route changes */}
-        <FitBounds routePath={routePath} />
+        {/* Auto-fit bounds when the active route changes */}
+        <FitBounds boundsCoords={boundsCoords} />
 
-        {/* Roads (normal) */}
+        {/* Roads (normal graph edges) */}
         {roads.map((r) => (
           <Polyline
             key={r._id}
@@ -47,13 +64,18 @@ export default function MapView({ locations, roads, routePath }) {
           />
         ))}
 
-        {/* Shortest Route (highlight) */}
-        {routeLine && (
+        {/* Active Route (highlight) */}
+        {useRealRoute && realRouteLine ? (
           <Polyline
-            positions={routeLine}
+            positions={realRouteLine}
+            pathOptions={{ weight: 7, opacity: 0.95 }}
+          />
+        ) : graphRouteLine ? (
+          <Polyline
+            positions={graphRouteLine}
             pathOptions={{ weight: 6, opacity: 0.9 }}
           />
-        )}
+        ) : null}
 
         {/* Locations */}
         {locations.map((loc) => (

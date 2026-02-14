@@ -6,10 +6,18 @@ export default function App() {
   const [locations, setLocations] = useState([]);
   const [roads, setRoads] = useState([]);
 
-  // Route Finder
+  // Route Finder (Graph + ORS)
   const [routeForm, setRouteForm] = useState({ from: "", to: "" });
+
+  // Graph route (Dijkstra)
   const [routePath, setRoutePath] = useState([]);
   const [routeDistance, setRouteDistance] = useState(null);
+
+  // Real route (ORS)
+  const [realRouteCoords, setRealRouteCoords] = useState([]); // [[lat,lng],...]
+  const [realDistanceKm, setRealDistanceKm] = useState(null);
+  const [useRealRoute, setUseRealRoute] = useState(true); // default ON
+
   const [loadingRoute, setLoadingRoute] = useState(false);
 
   // Location form
@@ -155,7 +163,6 @@ export default function App() {
 
   const displayedOrders = (() => {
     if (orderSort === "NEWEST") {
-      // newest first
       return mergeSort(filteredOrders, (a, b) => {
         const da = new Date(a.createdAt).getTime();
         const db = new Date(b.createdAt).getTime();
@@ -164,7 +171,6 @@ export default function App() {
     }
 
     if (orderSort === "PRIORITY") {
-      // HIGH -> MEDIUM -> LOW, then newest
       return mergeSort(filteredOrders, (a, b) => {
         const pa = priorityRank(a.priority);
         const pb = priorityRank(b.priority);
@@ -214,15 +220,47 @@ export default function App() {
     }
   };
 
+  // Graph route (Dijkstra)
   const calculateRoute = async (e) => {
     e.preventDefault();
     setLoadingRoute(true);
+
+    // clear real route display
+    setRealRouteCoords([]);
+    setRealDistanceKm(null);
+
     try {
       const res = await api.get(
         `/api/routes/shortest?from=${routeForm.from}&to=${routeForm.to}`
       );
       setRouteDistance(res.data.distance);
       setRoutePath(res.data.path || []);
+    } finally {
+      setLoadingRoute(false);
+    }
+  };
+
+  // Real route (ORS)
+  const calculateRealRoute = async (e) => {
+    e.preventDefault();
+    setLoadingRoute(true);
+
+    // clear graph route display
+    setRoutePath([]);
+    setRouteDistance(null);
+
+    try {
+      const res = await api.get(
+        `/api/routes/real?from=${routeForm.from}&to=${routeForm.to}`
+      );
+
+      const coords = res.data.geometry?.coordinates || []; // [lon,lat]
+      const latLng = coords.map(([lon, lat]) => [lat, lon]);
+
+      setRealRouteCoords(latLng);
+
+      const km = res.data.distance_m != null ? res.data.distance_m / 1000 : null;
+      setRealDistanceKm(km);
     } finally {
       setLoadingRoute(false);
     }
@@ -461,15 +499,19 @@ export default function App() {
               </form>
 
               <div className="mt-4 text-sm text-gray-600">
-                Total roads: <span className="font-semibold">{roads.length}</span>
+                Total roads:{" "}
+                <span className="font-semibold">{roads.length}</span>
               </div>
             </div>
 
             {/* Route Finder */}
             <div className="bg-white border rounded-xl p-5">
-              <h2 className="font-semibold mb-4">Route Finder (Shortest Path)</h2>
+              <h2 className="font-semibold mb-4">Route Finder</h2>
 
-              <form onSubmit={calculateRoute} className="space-y-3">
+              <form
+                onSubmit={useRealRoute ? calculateRealRoute : calculateRoute}
+                className="space-y-3"
+              >
                 <div>
                   <label className="text-xs text-gray-600">From</label>
                   <select
@@ -512,18 +554,33 @@ export default function App() {
                   </select>
                 </div>
 
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={useRealRoute}
+                    onChange={(e) => setUseRealRoute(e.target.checked)}
+                  />
+                  Use Real Road Route (ORS)
+                </label>
+
                 <button
                   disabled={loadingRoute}
                   className="w-full bg-black text-white rounded-lg py-2 disabled:opacity-60"
                 >
-                  {loadingRoute ? "Calculating..." : "Find Shortest Route"}
+                  {loadingRoute ? "Calculating..." : "Find Route"}
                 </button>
               </form>
 
               <div className="mt-4 text-sm text-gray-700">
                 Distance:{" "}
                 <span className="font-semibold">
-                  {routeDistance === null ? "-" : `${routeDistance} km`}
+                  {useRealRoute
+                    ? realDistanceKm == null
+                      ? "-"
+                      : `${realDistanceKm.toFixed(2)} km (real)`
+                    : routeDistance == null
+                    ? "-"
+                    : `${routeDistance} km (graph)`}
                 </span>
               </div>
             </div>
@@ -684,12 +741,20 @@ export default function App() {
           <div className="lg:col-span-2 space-y-6">
             <div className="bg-white border rounded-xl p-5">
               <h2 className="font-semibold mb-4">
-                Map View (Locations + Roads + Shortest Route)
+                Map View (Locations + Roads + Routes)
               </h2>
-              <MapView locations={locations} roads={roads} routePath={routePath} />
+
+              <MapView
+                locations={locations}
+                roads={roads}
+                routePath={routePath}
+                realRouteCoords={realRouteCoords}
+                useRealRoute={useRealRoute}
+              />
+
               <p className="mt-3 text-xs text-gray-600">
-                Roads are drawn as lines. Shortest path is drawn after route
-                calculation.
+                Roads are drawn as straight lines (graph edges). Route shows either
+                real road path (ORS) or graph shortest path (Dijkstra).
               </p>
             </div>
 
@@ -717,9 +782,7 @@ export default function App() {
 
               <div className="space-y-2">
                 {displayedOrders.length === 0 ? (
-                  <div className="text-sm text-gray-600">
-                    No matching orders.
-                  </div>
+                  <div className="text-sm text-gray-600">No matching orders.</div>
                 ) : (
                   displayedOrders.map((o) => (
                     <div key={o._id} className="border rounded-xl p-4">
@@ -735,7 +798,9 @@ export default function App() {
 
                         <button
                           onClick={() => enqueueOrder(o._id)}
-                          disabled={loadingEnqueueId === o._id || o.status !== "PENDING"}
+                          disabled={
+                            loadingEnqueueId === o._id || o.status !== "PENDING"
+                          }
                           className="bg-black text-white px-3 py-2 rounded-lg text-sm disabled:opacity-50"
                         >
                           {loadingEnqueueId === o._id ? "Enqueuing..." : "Enqueue"}
